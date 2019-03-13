@@ -1,6 +1,6 @@
 import time
 
-from backportbot.github import GithubBackportBot
+from backportbot.bot import GithubBackportBot
 
 
 POLL_TIME = 60
