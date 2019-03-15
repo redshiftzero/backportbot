@@ -6,10 +6,11 @@ Configure the following env vars for deployment:
 ```
 BACKPORT_GH_API = 'api_token_for_your_bot'
 BACKPORT_MAINTAINER = 'bot_listens_to_this_user'
-BACKPORT_BOT_NAME = 'bot_github_username'
+BACKPORT_BOT_GH_NAME = 'bot_github_username'
+BACKPORT_BOT_GH_EMAIL = 'bot_github_email'
+BACKPORT_BOT_SSH_KEY = 'SSH-key-for-bot'  # export BACKPORT_BOT_SSH_KEY=$(cat ~/.ssh/path_to_bot_key)
 BACKPORT_GH_ORG = 'bot_github_org'
 BACKPORT_GH_REPO = 'bot_github_repo'
-BACKPORT_GIT_REPO_PATH = 'path_to_git_repo_in_bot_container'
 BACKPORT_TRUNK_BRANCH = 'trunk_development_branch_name'
 ```
 

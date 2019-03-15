@@ -6,7 +6,7 @@ import sys
 from github import Github, GithubException
 
 
-PROGRESS_MESSAGE = '🦑🦑 OK! Trying to backport... PR will be up in a few'
+PROGRESS_MESSAGE = '🦑🦑 OK! Trying to backport... '
 SUCCESS_MESSAGE = '🦑 Backport PR is up!'
 EXPLAINER_MESSAGE = "Please mention me and say 'backport release_branch' where release_branch is the branch name you want this PR backported into"
 AUTH_FAILURE_MESSAGE = "You're not a maintainer, byeeeee"
@@ -21,17 +21,28 @@ class GithubBackportBot(object):
         try:  # Loading all required env vars
             self.github_api_token = os.environ['BACKPORT_GH_API']
             self.maintainer = os.environ['BACKPORT_MAINTAINER']
-            self.bot_name = os.environ['BACKPORT_BOT_NAME']
+            self.bot_name = os.environ['BACKPORT_BOT_GH_NAME']
+            self.bot_email = os.environ['BACKPORT_BOT_GH_EMAIL']
+            self.bot_ssh_key = os.environ['BACKPORT_BOT_SSH_KEY']
             self.github_org = os.environ['BACKPORT_GH_ORG']
             self.github_repo = os.environ['BACKPORT_GH_REPO']
-            self.github_fork_on_disk = os.environ['BACKPORT_GIT_REPO_PATH']
             self.trunk_branch = os.environ['BACKPORT_TRUNK_BRANCH']
+
+            # Save SSH key to disk with expected permissions.
+            path_to_ssh_priv_key = '/home/botuser/.ssh/id_rsa'
+            if not os.path.isfile(path_to_ssh_priv_key):
+                with open(path_to_ssh_priv_key, 'w') as f:
+                    f.write(self.bot_ssh_key)
+                    f.write('\n')
+            os.chmod(path_to_ssh_priv_key, 0o0600)
         except KeyError as e:
             print('Key not found: {}'.format(e))
             sys.exit()
 
-        # Local git config
-        self.git_repo = git.Repo(self.github_fork_on_disk)
+        # Local git config, assumes use of SSH.
+        self.git_repo = git.Repo.clone_from('git@github.com:{}/{}.git'.format(self.bot_name, self.github_repo), '/home/botuser/gitdir')
+        self.git_repo.config_writer().set_value("user", "name", self.bot_name).release()
+        self.git_repo.config_writer().set_value("user", "email", self.bot_email).release()
 
         # GitHub API
         self.github_api = Github(self.github_api_token)
@@ -46,7 +57,8 @@ class GithubBackportBot(object):
         notifications = self.user.get_notifications()
 
         for notification in notifications:
-            self.handle_backport_request(notification)
+            if notification.reason == 'mention':  # We only react to mentions.
+                self.handle_backport_request(notification)
 
         return
 
@@ -94,7 +106,7 @@ class GithubBackportBot(object):
             pull_request.create_issue_comment('@{} {}'.format(username_bot_was_mentioned_by, 
                                                               PROGRESS_MESSAGE))
             branch_name = self.prepare_branch_for_backport(pull_request_id, branch_to_backport, release_branch)
-            self.make_pr(branch_name)
+            self.make_pr(pull_request_id, branch_to_backport, branch_name, release_branch)
             pull_request.create_issue_comment(SUCCESS_MESSAGE)
             notification.mark_as_read()
         except git.exc.GitCommandError:  # This is the exception that occurs for a conflict.
@@ -129,7 +141,6 @@ class GithubBackportBot(object):
         release_branch [str]: Name of the release branch we want to backport into.
         """
 
-        self.clone_fork_of_project()
         upstream = self.add_upstream_remote_of_project_if_needed()
 
         # Get latest release branch and check it out.
@@ -172,13 +183,6 @@ class GithubBackportBot(object):
         origin.push(new_branch)
 
         return new_branch
-
-    def clone_fork_of_project(self):
-        """
-        Helper method that ensures the fork is cloned.
-        """
-        #self.git_repo = ''
-        pass
 
     def add_upstream_remote_of_project_if_needed(self):
         """
